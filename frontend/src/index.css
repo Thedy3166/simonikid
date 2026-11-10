@@ -1,0 +1,98 @@
+/* ============================================================
+   SIMONIK - Global CSS
+   File: src/index.css
+   ============================================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f5f7fa;
+}
+
+/* ============================================================
+   ANIMASI
+   ============================================================ */
+
+/* Background gradient bergerak halus */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Fade in + slide up (untuk card) */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Fade in (untuk teks) */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Slide down (untuk error box) */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   CLASS UTILITY
+   ============================================================ */
+
+.animate-card {
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.animate-title {
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out 0.2s forwards;
+}
+
+.animate-subtitle {
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out 0.35s forwards;
+}
+
+.animate-form {
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out 0.5s forwards;
+}
+
+.animate-hint {
+  opacity: 0;
+  animation: fadeIn 0.5s ease-out 0.7s forwards;
+}
+
+.animate-error {
+  animation: slideDown 0.3s ease-out;
+}
