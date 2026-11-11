@@ -35,7 +35,7 @@ disimpan di Supabase.
    ```powershell
    git commit -m "Initial SIMONIK deployment"
    git branch -M main
-   git remote add origin https://github.com/USERNAME/NAMA-REPOSITORY.git
+   git remote add origin https://github.com/Thedy3166/simonikid.git
    git push -u origin main
    ```
 
@@ -113,7 +113,7 @@ belum berfungsi sampai backend selesai dan URL API diperbarui pada langkah 5.
 
 4. Deploy dan catat URL **Production** frontend. Jangan gunakan URL Preview
    untuk konfigurasi produksi.
-
+https://simonik-sage.vercel.app
 ## 4. Deploy backend
 
 1. Di Vercel pilih **Add New > Project** dan import repository GitHub yang sama

@@ -3,7 +3,7 @@
 // File: src/pages/user/CreateReportPage.jsx
 // ============================================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -67,16 +67,22 @@ export default function CreateReportPage() {
   const [error, setError] = useState('');
   const [gpsLoading, setGpsLoading] = useState(false);
   const [gpsStatus, setGpsStatus] = useState('');
-
-  useEffect(() => {
-    if (scopeInfo) handleGetLocation();
-  }, [scopeInfo]);
+  const [locationQuery, setLocationQuery] = useState('');
+  const [locationResults, setLocationResults] = useState([]);
+  const [locationSearchLoading, setLocationSearchLoading] = useState(false);
+  const [locationSearchError, setLocationSearchError] = useState('');
+  const lastLocationSearch = useRef(0);
 
   function handleGetLocation() {
     if (!navigator.geolocation) {
-      setGpsStatus('Browser tidak mendukung GPS.');
+      setGpsStatus('Browser tidak mendukung akses lokasi. Klik peta untuk memilih lokasi.');
       return;
     }
+    if (!window.isSecureContext) {
+      setGpsStatus('Akses lokasi memerlukan HTTPS. Klik peta untuk memilih lokasi.');
+      return;
+    }
+
     setGpsLoading(true);
     setGpsStatus('Mengambil lokasi...');
     navigator.geolocation.getCurrentPosition(
@@ -88,11 +94,95 @@ export default function CreateReportPage() {
       },
       (err) => {
         console.error(err);
-        setGpsStatus('Gagal mengambil lokasi. Silakan klik peta untuk memilih manual.');
+        const messages = {
+          1: 'Izin lokasi ditolak. Izinkan akses lokasi di pengaturan browser, atau klik peta.',
+          2: 'Lokasi tidak tersedia. Aktifkan GPS/lokasi perangkat atau klik peta.',
+          3: 'Permintaan lokasi terlalu lama. Coba lagi atau klik peta.',
+        };
+        setGpsStatus(messages[err.code] || 'Gagal mengambil lokasi. Silakan klik peta untuk memilih manual.');
         setGpsLoading(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }
     );
+  }
+
+  async function handleSearchLocation() {
+    const query = locationQuery.trim();
+    if (!query) {
+      setLocationSearchError('Masukkan nama tempat atau alamat yang ingin dicari.');
+      setLocationResults([]);
+      return;
+    }
+
+    const wait = 1000 - (Date.now() - lastLocationSearch.current);
+    if (wait > 0) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+
+    lastLocationSearch.current = Date.now();
+    setLocationSearchLoading(true);
+    setLocationSearchError('');
+    setLocationResults([]);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        format: 'jsonv2',
+        limit: '5',
+      });
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+        {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          response.status === 429
+            ? 'Layanan pencarian sedang membatasi permintaan. Coba lagi sebentar.'
+            : 'Layanan pencarian lokasi sedang tidak tersedia. Coba lagi nanti.'
+        );
+      }
+
+      const results = await response.json();
+      if (!Array.isArray(results)) {
+        throw new Error('Respons pencarian lokasi tidak valid.');
+      }
+
+      setLocationResults(results);
+      if (results.length === 0) {
+        setLocationSearchError('Lokasi tidak ditemukan. Coba kata kunci atau alamat lain.');
+      }
+    } catch (error) {
+      setLocationSearchError(
+        error.name === 'AbortError'
+          ? 'Pencarian terlalu lama. Periksa koneksi lalu coba lagi.'
+          : error.message || 'Pencarian lokasi gagal. Coba lagi nanti.'
+      );
+    } finally {
+      clearTimeout(timeoutId);
+      setLocationSearchLoading(false);
+    }
+  }
+
+  function handleSelectLocation(result) {
+    const latitude = Number(result.lat);
+    const longitude = Number(result.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setLocationSearchError('Koordinat hasil pencarian tidak valid.');
+      return;
+    }
+
+    setPosition([latitude, longitude]);
+    setGpsStatus('Lokasi dipilih dari hasil pencarian.');
+    setLocationQuery(result.display_name);
+    setLocationResults([]);
+    setLocationSearchError('');
   }
 
   function handlePhotoChange(e) {
@@ -315,6 +405,58 @@ export default function CreateReportPage() {
 
           <div style={styles.field}>
             <label style={styles.label}>Lokasi</label>
+            <div style={styles.locationSearch}>
+              <div style={styles.locationSearchRow}>
+                <input
+                  type="search"
+                  value={locationQuery}
+                  onChange={(e) => setLocationQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSearchLocation();
+                    }
+                  }}
+                  placeholder="Cari nama tempat atau alamat"
+                  aria-label="Cari lokasi berdasarkan nama tempat atau alamat"
+                  style={styles.locationSearchInput}
+                />
+                <button
+                  type="button"
+                  onClick={handleSearchLocation}
+                  disabled={locationSearchLoading}
+                  style={styles.locationSearchButton}
+                >
+                  {locationSearchLoading ? 'Mencari...' : 'Cari'}
+                </button>
+              </div>
+              <p style={styles.locationSearchAttribution}>
+                Pencarian: Nominatim. Data &copy;{' '}
+                <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
+                  OpenStreetMap contributors
+                </a>
+              </p>
+              {locationSearchError && (
+                <p role="status" style={styles.locationSearchError}>
+                  {locationSearchError}
+                </p>
+              )}
+              {locationResults.length > 0 && (
+                <ul style={styles.locationResults}>
+                  {locationResults.map((result) => (
+                    <li key={result.place_id}>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectLocation(result)}
+                        style={styles.locationResult}
+                      >
+                        {result.display_name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <div style={styles.gpsRow}>
               <button
                 type="button"
@@ -324,7 +466,9 @@ export default function CreateReportPage() {
               >
                 {gpsLoading ? 'Mengambil...' : 'Gunakan Lokasi Saat Ini'}
               </button>
-              <span style={styles.gpsStatus}>{gpsStatus}</span>
+              <span style={styles.gpsStatus}>
+                {gpsStatus || 'Tekan tombol untuk meminta lokasi, atau klik peta untuk memilih manual.'}
+              </span>
             </div>
             <div style={styles.mapWrapper}>
               <MapContainer center={position} zoom={DEFAULT_ZOOM} style={styles.map}>
@@ -581,6 +725,59 @@ const styles = {
   gpsStatus: {
     fontSize: '13px',
     color: '#6b7280',
+  },
+  locationSearch: {
+    marginBottom: '12px',
+  },
+  locationSearchRow: {
+    display: 'flex',
+    gap: '8px',
+  },
+  locationSearchInput: {
+    flex: 1,
+    minWidth: 0,
+    padding: '10px 12px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    fontSize: '14px',
+  },
+  locationSearchButton: {
+    padding: '8px 18px',
+    backgroundColor: '#0b3d6b',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+  },
+  locationSearchAttribution: {
+    marginTop: '6px',
+    color: '#6b7280',
+    fontSize: '12px',
+  },
+  locationSearchError: {
+    marginTop: '6px',
+    color: '#b91c1c',
+    fontSize: '13px',
+  },
+  locationResults: {
+    listStyle: 'none',
+    marginTop: '6px',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    overflow: 'hidden',
+  },
+  locationResult: {
+    width: '100%',
+    padding: '10px 12px',
+    border: 'none',
+    borderBottom: '1px solid #e5e7eb',
+    background: '#fff',
+    color: '#1f2937',
+    textAlign: 'left',
+    fontSize: '13px',
+    cursor: 'pointer',
   },
   mapWrapper: {
     height: '300px',

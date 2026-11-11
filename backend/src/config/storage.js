@@ -16,7 +16,8 @@ function getClient() {
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error('Konfigurasi Supabase Storage belum diatur di environment');
     }
-    client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    const projectUrl = SUPABASE_URL.replace(/\/rest\/v1\/?$/, '');
+    client = createClient(projectUrl, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
   }
